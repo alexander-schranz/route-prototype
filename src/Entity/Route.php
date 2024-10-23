@@ -22,10 +22,10 @@ class Route
     #[ORM\Column(length: 11)]
     private ?string $locale = null;
 
-    #[ORM\Column(type: Types::TEXT)]
+    #[ORM\Column(type: Types::STRING)]
     private ?string $slug = null;
 
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[ORM\Column(type: Types::STRING, nullable: true)]
     private ?string $parentSlug = null;
 
     #[ORM\Column(length: 32)]

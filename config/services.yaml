@@ -15,6 +15,7 @@ services:
     # this creates a service per class whose id is the fully-qualified class name
     App\:
         resource: '../src/'
+        public: true
         exclude:
             - '../src/DependencyInjection/'
             - '../src/Entity/'

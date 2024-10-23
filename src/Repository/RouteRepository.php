@@ -22,4 +22,9 @@ class RouteRepository
     {
         $this->entityManager->persist($route);
     }
+
+    public function findOneBy(array $criteria): ?Route
+    {
+        return $this->repository->findOneBy($criteria);
+    }
 }
