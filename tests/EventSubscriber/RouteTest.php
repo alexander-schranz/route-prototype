@@ -24,8 +24,7 @@ class RouteTest extends KernelTestCase
         array $routes,
         string $changeRoute,
         array $expectedRoutes,
-    ): void
-    {
+    ): void {
         $repository = self::getContainer()->get(RouteRepository::class);
         $entityManager = self::getContainer()->get(EntityManagerInterface::class);
 
@@ -42,12 +41,14 @@ class RouteTest extends KernelTestCase
 
         $firstRoute->setSlug($changeRoute);
         $entityManager->flush();
+        $entityManager->clear();
 
         foreach ($expectedRoutes as $expectedRoute) {
             $route = $repository->findOneBy([
                 'resourceKey' => 'page',
                 'resourceId' => $expectedRoute['resourceId'],
                 'locale' => 'en',
+                'site' => 'website',
             ]);
             $this->assertNotNull($route);
 
@@ -69,99 +70,99 @@ class RouteTest extends KernelTestCase
             'expectedRoutes' => [
                 [
                     'resourceId' => '1',
-                    'slug' => '/test',
+                    'slug' => '/test-article',
                 ],
             ],
         ];
 
         yield 'direct_childs_update' => [
-                'routes' => [
-                    [
-                        'resourceId' => '1',
-                        'slug' => '/test'
-                    ],
-                    [
-                        'resourceId' => '2',
-                        'slug' => '/test/child-a',
-                        'parentSlug' => '/test',
-                    ],
-                    [
-                        'resourceId' => '3',
-                        'slug' => '/test/child-b',
-                        'parentSlug' => '/test',
-                    ],
-                ],
-                    'changeRoute' => '/test-article',
-                    'expectedRoutes' => [
+            'routes' => [
                 [
                     'resourceId' => '1',
-                    'slug' => '/test',
+                    'slug' => '/test'
                 ],
                 [
                     'resourceId' => '2',
-                    'slug' => '/test-article/child-a',
+                    'slug' => '/test/child-a',
                     'parentSlug' => '/test',
                 ],
                 [
                     'resourceId' => '3',
-                    'slug' => '/test-article/child-b',
+                    'slug' => '/test/child-b',
                     'parentSlug' => '/test',
+                ],
+            ],
+            'changeRoute' => '/test-article',
+            'expectedRoutes' => [
+                [
+                    'resourceId' => '1',
+                    'slug' => '/test-article',
+                ],
+                [
+                    'resourceId' => '2',
+                    'slug' => '/test-article/child-a',
+                    'parentSlug' => '/test-article',
+                ],
+                [
+                    'resourceId' => '3',
+                    'slug' => '/test-article/child-b',
+                    'parentSlug' => '/test-article',
                 ],
             ],
         ];
 
         yield 'nested_childs_update' => [
-                'routes' => [
-                    [
-                        'resourceId' => '1',
-                        'slug' => '/test'
-                    ],
-                    [
-                        'resourceId' => '2',
-                        'slug' => '/test/child-a',
-                        'parentSlug' => '/test',
-                    ],
-                    [
-                        'resourceId' => '3',
-                        'slug' => '/test/child-b',
-                        'parentSlug' => '/test',
-                    ],
-                    [
-                        'resourceId' => '4',
-                        'slug' => '/test/child-b/grand-child-a',
-                        'parentSlug' => '/test/child-b',
-                    ],
-                    [
-                        'resourceId' => '5',
-                        'slug' => '/test/child-b/grand-child-b',
-                        'parentSlug' => '/test/child-b',
-                    ],
-                ],
-                    'changeRoute' => '/test-article',
-                    'expectedRoutes' => [
+            'routes' => [
                 [
                     'resourceId' => '1',
-                    'slug' => '/test',
+                    'slug' => '/test'
                 ],
                 [
                     'resourceId' => '2',
-                    'slug' => '/test-article/child-a',
+                    'slug' => '/test/child-a',
                     'parentSlug' => '/test',
                 ],
                 [
                     'resourceId' => '3',
-                    'slug' => '/test-article/child-b',
+                    'slug' => '/test/child-b',
                     'parentSlug' => '/test',
                 ],
                 [
                     'resourceId' => '4',
-                    'slug' => '/test-article/child-b/grand-child-a',
+                    'slug' => '/test/child-b/grand-child-a',
                     'parentSlug' => '/test/child-b',
                 ],
                 [
                     'resourceId' => '5',
-                    'slug' => '/test-article/child-b/grand-child-b',
+                    'slug' => '/test/child-b/grand-child-b',
                     'parentSlug' => '/test/child-b',
+                ],
+            ],
+            'changeRoute' => '/test-article',
+            'expectedRoutes' => [
+                [
+                    'resourceId' => '1',
+                    'slug' => '/test-article',
+                ],
+                [
+                    'resourceId' => '2',
+                    'slug' => '/test-article/child-a',
+                    'parentSlug' => '/test-article',
+                ],
+                [
+                    'resourceId' => '3',
+                    'slug' => '/test-article/child-b',
+                    'parentSlug' => '/test-article',
+                ],
+                [
+                    'resourceId' => '4',
+                    'slug' => '/test-article/child-b/grand-child-a',
+                    'parentSlug' => '/test-article/child-b',
+                ],
+                [
+                    'resourceId' => '5',
+                    'slug' => '/test-article/child-b/grand-child-b',
+                    'parentSlug' => '/test-article/child-b',
                 ],
             ],
         ];
