@@ -55,32 +55,34 @@ class RouteChangedUpdater implements ResetInterface
 
             // select all child and grand routes of oldSlug
             $selectQueryBuilder = $connection->createQueryBuilder()
-                ->from('route', 'r')
-                ->select('r.id')
-                ->where('(r.parent_slug = :oldSlug OR r.parent_slug LIKE :oldSlugSlash)')
-                ->andWhere('r.locale = :locale')
-                ->andWhere('r.site = :site') // TODO site can be nullable how to handle this? parent_site?
-                ->setParameter('oldSlug', $oldSlug)
+                ->from('route', 'parent')
+                ->select('parent.id as parentId')
+                ->innerJoin('parent', 'route', 'child', 'child.parent_id = parent.id')
+                ->andWhere('(parent.site = :site)')
+                ->andWhere('parent.locale = :locale')
+                ->andWhere('(parent.slug = :newSlug OR parent.slug LIKE :oldSlugSlash)') // direct child is using newSlug already updated as we are in PostFlush, grand child use oldSlugWithSlash as not yet updated
+                ->setParameter('newSlug', $newSlug)
                 ->setParameter('oldSlugSlash', $oldSlug . '/%')
                 ->setParameter('locale', $locale)
                 ->setParameter('site', $site);
 
-            $ids = \array_map(fn($row) => $row['id'], $selectQueryBuilder->executeQuery()->fetchAllAssociative());
+            $parentIds = \array_map(fn($row) => $row['parentId'], $selectQueryBuilder->executeQuery()->fetchAllAssociative());
 
-            if (\count($ids) === 0) {
+            if (\count($parentIds) === 0) {
                 continue;
             }
+
+            \array_unique($parentIds); // DISTINCT and GROUP BY a lot slower as make it unique in PHP itself
 
             // TODO create history for current ids
 
             // update child and grand routes
             $updateQueryBuilder = $connection->createQueryBuilder()->update('route', 'r')
                 ->set('r.slug', 'CONCAT(:newSlug, SUBSTRING(r.slug, LENGTH(:oldSlug) + 1))')
-                ->set('r.parent_slug', 'CONCAT(:newSlug, SUBSTRING(r.parent_slug, LENGTH(:oldSlug) + 1))')
                 ->setParameter('newSlug', $newSlug)
                 ->setParameter('oldSlug', $oldSlug)
-                ->where('r.id IN (:ids)')
-                ->setParameter('ids', $ids, ArrayParameterType::INTEGER);
+                ->where('r.parent_id IN (:parentIds)')
+                ->setParameter('parentIds', $parentIds, ArrayParameterType::INTEGER);
 
             $updateQueryBuilder->executeStatement();
         }

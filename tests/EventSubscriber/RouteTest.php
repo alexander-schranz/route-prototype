@@ -16,7 +16,7 @@ class RouteTest extends KernelTestCase
     protected function setUp(): void
     {
         $entityManager = self::getContainer()->get(EntityManagerInterface::class);
-        $entityManager->getConnection()->executeStatement('DELETE FROM route');
+        $entityManager->getConnection()->executeStatement('DELETE FROM route WHERE 1 = 1');
     }
 
     #[DataProvider('provideRoutes')]
@@ -29,16 +29,36 @@ class RouteTest extends KernelTestCase
         $entityManager = self::getContainer()->get(EntityManagerInterface::class);
 
         $firstRoute = null;
-        foreach ($routes as $route) {
-            $route = $this->createRoute($route);
+        $createdRoutes = [];
+        $count = 0;
+        foreach ($routes as $routeData) {
+            $route = $this->createRoute($routeData);
+            $uniqueKey = ($route->getSite() ?? '') . $route->getLocale() . $route->getSlug();
+            $parentUniqueKey = ($route->getSite() ?? '') . $route->getLocale() . $routeData['parentSlug'];
+            $parentRoute = $createdRoutes[$parentUniqueKey] ?? null;
+            if ($parentRoute?->getId()) {
+                $parentRoute = $entityManager->getReference(Route::class, $createdRoutes[$parentUniqueKey]->getId());
+            }
+
+            $route->setParentRoute($parentRoute);
             $repository->add($route);
+            $createdRoutes[$uniqueKey] = $route;
 
             $firstRoute ??= $route;
+
+            ++$count;
+
+            if ($count % 1000 === 0) {
+                $entityManager->flush();
+                $entityManager->clear();
+                \gc_collect_cycles();
+            }
         }
 
         $entityManager->flush();
+        $entityManager->clear();
         $this->assertNotNull($firstRoute);
-
+        $firstRoute = $entityManager->getReference(Route::class, $firstRoute->getId());
         $firstRoute->setSlug($changeRoute);
         $entityManager->flush();
         $entityManager->clear();
@@ -53,7 +73,15 @@ class RouteTest extends KernelTestCase
             $this->assertNotNull($route);
 
             $this->assertSame($expectedRoute['slug'], $route->getSlug());
-            $this->assertSame($expectedRoute['parentSlug'] ?? null, $route->getParentSlug());
+            $this->assertSame($expectedRoute['parentSlug'] ?? null, $route->getParentRoute()?->getSlug());
+
+            ++$count;
+            if ($count % 100 === 0) {
+                $entityManager->clear();
+            }
+            if ($count % 1000 === 0) {
+                \gc_collect_cycles();
+            }
         }
     }
 
@@ -166,6 +194,76 @@ class RouteTest extends KernelTestCase
                 ],
             ],
         ];
+
+        yield 'heavy_load' => static::generateNestedRoutes('/rezepte', '/rezepte-neu', 10, 100_000);
+    }
+
+    private static function generateNestedRoutes($baseSlug, $newSlug, $depth = 10, $totalUrls = 100000) {
+        $routes = [];
+        $expectedRoutes = [];
+        $queue = [
+            [
+                'resourceId' => 1,
+                'slug' => $baseSlug,
+                'parentSlug' => null,
+                'depth' => 1,
+                'uniqueSuffix' => null, // No suffix for the baseSlug
+            ]
+        ];
+        $resourceId = 2;
+
+        // Add independent routes to mix with the main route tree
+        $independentRoots = ['/independent-route-1', '/independent-route-2', '/independent-route-3'];
+        foreach ($independentRoots as $index => $independentSlug) {
+            $queue[] = [
+                'resourceId' => $resourceId++,
+                'slug' => $independentSlug,
+                'parentSlug' => null,
+                'depth' => 1,
+                'uniqueSuffix' => $index + 1, // Ensuring unique suffix for independent roots
+            ];
+        }
+
+        while (count($routes) < $totalUrls && $queue) {
+            $node = array_shift($queue);
+            // Only apply unique suffix if it is not the baseSlug
+            $uniqueSlug = $node['uniqueSuffix'] === null ? $node['slug'] : $node['slug'] . '-' . $node['uniqueSuffix'];
+            $routes[] = [
+                'resourceId' => $node['resourceId'],
+                'slug' => $uniqueSlug,
+                'parentSlug' => $node['parentSlug'],
+            ];
+
+            // Modify slug to expected new route
+            $expectedSlug = str_replace($baseSlug, $newSlug, $uniqueSlug);
+            $expectedRoutes[] = [
+                'resourceId' => $node['resourceId'],
+                'slug' => $expectedSlug,
+                'parentSlug' => $node['parentSlug'] ? str_replace($baseSlug, $newSlug, $node['parentSlug']) : null,
+            ];
+
+            if ($node['depth'] < $depth) {
+                for ($i = 1; $i <= 5; $i++) { // Adjust branching factor to reach ~100k URLs
+                    if (count($routes) >= $totalUrls) {
+                        break 2;
+                    }
+                    $childSlug = $node['slug'] . '/child-' . $i;
+                    $queue[] = [
+                        'resourceId' => $resourceId++,
+                        'slug' => $childSlug,
+                        'parentSlug' => $uniqueSlug,
+                        'depth' => $node['depth'] + 1,
+                        'uniqueSuffix' => $resourceId, // Use resourceId for unique suffix
+                    ];
+                }
+            }
+        }
+
+        return [
+            'routes' => $routes,
+            'changeRoute' => $newSlug,
+            'expectedRoutes' => $expectedRoutes,
+        ];
     }
 
     private function createRoute(array $route): Route
@@ -176,7 +274,6 @@ class RouteTest extends KernelTestCase
             'en',
             $route['slug'],
             'website',
-            $route['parentSlug'] ?? null
         );
     }
 }
